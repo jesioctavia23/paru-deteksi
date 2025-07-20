@@ -5,4 +5,4 @@ numpy==2.2.6
 soundfile==0.13.1
 joblib==1.5.1
 requests==2.32.4
-gunicorn
+gunicorn==21.2.0
