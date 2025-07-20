@@ -3,3 +3,4 @@ librosa
 numpy
 soundfile
 scikit-learn
+gunicorn

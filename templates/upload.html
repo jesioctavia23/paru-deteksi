@@ -125,18 +125,17 @@
     <img src="/static/img/batuk1.jpg" alt="Ilustrasi Batuk" class="illustration" />
     <h2>🎧 Deteksi Penyakit Paru dari Suara Batuk</h2>
 
-    <!-- Upload file audio -->
+    <!-- Upload file audio manual -->
     <form action="/predict" method="POST" enctype="multipart/form-data" class="mb-3">
-    <input type="file" id="fileInput" name="file" accept=".wav" class="form-control mb-3" required />
-<audio id="previewPlayer" controls style="width: 100%; display: none;"></audio>
-
+      <input type="file" id="fileInput" name="file" accept=".wav" class="form-control mb-3" required />
+      <audio id="previewPlayer" controls style="width: 100%; display: none;"></audio>
       <button type="submit" class="btn btn-primary w-100">📁 Deteksi dari File</button>
     </form>
 
     <hr class="text-white"/>
 
+    <!-- Countdown -->
     <div id="countdown" style="font-size: 28px; font-weight: bold; color: #ffd700; display: none; margin-bottom: 10px;"></div>
-
 
     <!-- Tombol rekam -->
     <div class="mb-3">
@@ -147,10 +146,10 @@
       </div>
     </div>
 
-    <!-- Audio player -->
+    <!-- Audio player hasil rekaman -->
     <audio id="audioPlayer" class="audio-player" controls></audio>
 
-    <!-- Submit rekaman -->
+    <!-- Tombol deteksi rekaman -->
     <form id="recordForm" class="mt-2">
       <button type="submit" id="submitRecord" class="btn btn-success w-100" disabled>🧠 Deteksi dari Rekaman</button>
     </form>
@@ -158,110 +157,120 @@
     <small>🎓 Gunakan Chrome/Firefox. Rekaman disimpan sebagai file <code>.wav</code> valid.</small>
   </div>
 
- <script>
-  let mediaRecorder;
-  let audioChunks = [];
+  <script>
+    let mediaRecorder;
+    let audioChunks = [];
+    let blob;
 
-  const startBtn = document.getElementById("startBtn");
-  const stopBtn = document.getElementById("stopBtn");
-  const audioPlayer = document.getElementById("audioPlayer");
-  const submitRecord = document.getElementById("submitRecord");
-  const recordingIndicator = document.getElementById("recordingIndicator");
-  const countdownEl = document.getElementById("countdown");
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const audioPlayer = document.getElementById("audioPlayer");
+    const submitRecord = document.getElementById("submitRecord");
+    const recordingIndicator = document.getElementById("recordingIndicator");
+    const countdownEl = document.getElementById("countdown");
 
-  startBtn.onclick = async () => {
-    let countdown = 3;
-    countdownEl.style.display = "block";
-    countdownEl.innerText = countdown;
+    // Mulai countdown
+    startBtn.onclick = async () => {
+      let countdown = 3;
+      countdownEl.style.display = "block";
+      countdownEl.innerText = countdown;
 
-    const interval = setInterval(() => {
-      countdown--;
-      if (countdown > 0) {
-        countdownEl.innerText = countdown;
-      } else {
-        clearInterval(interval);
-        countdownEl.style.display = "none";
-        mulaiRekam();
-      }
-    }, 1000);
-  };
-
-  async function mulaiRekam() {
-    audioChunks = [];
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-
-    mediaRecorder.ondataavailable = (event) => {
-      audioChunks.push(event.data);
+      const interval = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+          countdownEl.innerText = countdown;
+        } else {
+          clearInterval(interval);
+          countdownEl.style.display = "none";
+          mulaiRekam();
+        }
+      }, 1000);
     };
 
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(audioChunks, { type: "audio/wav" });
-      const audioURL = URL.createObjectURL(blob);
-      audioPlayer.src = audioURL;
-      submitRecord.disabled = false;
-      recordingIndicator.style.display = "none";
+    // Mulai rekaman
+    async function mulaiRekam() {
+      audioChunks = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
 
-      // Tambah amplifier volume (GainNode)
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioContext.createMediaElementSource(audioPlayer);
-      const gainNode = audioContext.createGain();
-      gainNode.gain.value = 1.8; // Volume diperbesar 1.8x
-      source.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      submitRecord.onclick = (e) => {
-        e.preventDefault();
-        const formData = new FormData();
-        const file = new File([blob], "rekaman.wav", { type: "audio/wav" });
-        formData.append("file", file);
-
-        fetch("/predict", {
-          method: "POST",
-          body: formData,
-        })
-          .then((res) => res.text())
-          .then((result) => {
-            document.body.innerHTML = result;
-          })
-          .catch((err) => {
-            alert("Gagal mengirim rekaman.");
-            console.error(err);
-          });
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
       };
+
+      mediaRecorder.onstop = () => {
+        blob = new Blob(audioChunks, { type: "audio/wav" });
+        const audioURL = URL.createObjectURL(blob);
+        audioPlayer.src = audioURL;
+        submitRecord.disabled = false;
+        recordingIndicator.style.display = "none";
+
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaElementSource(audioPlayer);
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 1.8;
+        source.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+      };
+
+      mediaRecorder.start();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      recordingIndicator.style.display = "inline-block";
+    }
+
+    // Stop rekaman
+    stopBtn.onclick = () => {
+      mediaRecorder.stop();
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
     };
 
-    mediaRecorder.start();
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    recordingIndicator.style.display = "inline-block";
-  }
+    // Kirim rekaman ke server
+    submitRecord.onclick = (e) => {
+      e.preventDefault();
+      if (!blob) {
+        alert("Belum ada rekaman yang tersedia.");
+        return;
+      }
 
-  stopBtn.onclick = () => {
-    mediaRecorder.stop();
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-};
+      const formData = new FormData();
+      const file = new File([blob], "rekaman.wav", { type: "audio/wav" });
+      formData.append("file", file);
 
-//// === Preview file audio sebelum diupload ===
-const fileInput = document.getElementById('fileInput');
-const previewPlayer = document.getElementById('previewPlayer');
-
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
-  if (file && file.type === "audio/wav") {
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      previewPlayer.src = e.target.result;
-      previewPlayer.style.display = "block";
+      fetch("/predict", {
+        method: "POST",
+        body: formData,
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Gagal mengirim ke server");
+          return res.text();
+        })
+        .then((result) => {
+          document.body.innerHTML = result;
+        })
+        .catch((err) => {
+          alert("Error: " + err.message);
+          console.error(err);
+        });
     };
-    reader.readAsDataURL(file);
-  } else {
-    previewPlayer.style.display = "none";
-  }
-});
 
-</script>
+    // Preview file manual
+    const fileInput = document.getElementById('fileInput');
+    const previewPlayer = document.getElementById('previewPlayer');
 
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (file && file.type === "audio/wav") {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          previewPlayer.src = e.target.result;
+          previewPlayer.style.display = "block";
+        };
+        reader.readAsDataURL(file);
+      } else {
+        previewPlayer.style.display = "none";
+      }
+    });
+  </script>
 </body>
 </html>
